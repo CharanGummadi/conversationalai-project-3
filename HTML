@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Audio Sentiment Analysis</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0e6ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: #4a4a4a;
+        }
+        .container {
+            background-color: #fff0f5;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        .audio-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #9370db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        input[type="file"] {
+            background-color: #e6e6fa;
+            border: 2px dashed #9370db;
+            border-radius: 10px;
+            padding: 20px;
+            width: 100%;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        #result {
+            margin-top: 20px;
+            background-color: #e6e6fa;
+            padding: 15px;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #audioPlayer {
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Audio Sentiment Analysis</h1>
+        
+        <div class="audio-controls">
+            <button id="startRecording">Start Recording</button>
+            <button id="stopRecording" disabled>Stop Recording</button>
+        </div>
+
+        <input type="file" id="audioFile" accept=".mp3,.wav,.mpeg" />
+        <audio id="audioPlayer" controls></audio>
+        <button onclick="analyzeAudio()">Analyze Audio</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        const startRecordingBtn = document.getElementById('startRecording');
+        const stopRecordingBtn = document.getElementById('stopRecording');
+        const audioFileInput = document.getElementById('audioFile');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const resultDiv = document.getElementById('result');
+
+        startRecordingBtn.addEventListener('click', startRecording);
+        stopRecordingBtn.addEventListener('click', stopRecording);
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audioFile = new File([audioBlob], 'recording.wav', { type: 'audio/wav' });
+                    
+                    audioFileInput.files = createFileList([audioFile]);
+                    audioPlayer.src = audioUrl;
+                    audioPlayer.style.display = 'block';
+                };
+                
+                mediaRecorder.start();
+                startRecordingBtn.disabled = true;
+                stopRecordingBtn.disabled = false;
+            } catch (err) {
+                resultDiv.textContent = `Recording error: ${err.message}`;
+            }
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            startRecordingBtn.disabled = false;
+            stopRecordingBtn.disabled = true;
+        }
+
+        function createFileList(files) {
+            const dataTransfer = new DataTransfer();
+            files.forEach(file => dataTransfer.items.add(file));
+            return dataTransfer.files;
+        }
+
+        async function analyzeAudio() {
+            const audioFile = audioFileInput.files[0];
+
+            if (!audioFile) {
+                resultDiv.textContent = "Please record or select an audio file.";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('audio', audioFile);
+
+            try {
+                resultDiv.textContent = "Processing audio... Please wait.";
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    resultDiv.textContent = `Error: ${data.error}`;
+                } else {
+                    resultDiv.textContent = data.analysis;
+                }
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
